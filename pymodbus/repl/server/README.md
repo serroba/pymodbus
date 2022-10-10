@@ -75,7 +75,7 @@ Don't forget to restart the terminal for the auto-completion to kick-in. Use `TA
 Example usage.
 
 ```shell
-✗ pymodbus.server run --modbus-server tcp --framer socket --unit-id 1 --unit-id 4 --random 2
+✗ pymodbus.server run --modbus-server tcp --modbus-framer socket --modbus-unit-id 1 --modbus-unit-id 4 --randomize 2
 
 __________                          .______.                    _________
 \______   \___.__. _____   ____   __| _/\_ |__  __ __  ______  /   _____/ ______________  __ ___________
