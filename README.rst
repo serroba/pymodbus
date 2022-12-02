@@ -19,7 +19,7 @@ Supported versions
 
 Version `2.5.3 <https://github.com/riptideio/pymodbus/releases/tag/v2.5.3>`_ is the last 2.x release (Supports python 2.7.x - 3.7).
 
-Version `3.0.0 <https://github.com/riptideio/pymodbus/releases/tag/v3.0.0>`_ is the current release (Supports Python >=3.8).
+Version `3.0.2 <https://github.com/riptideio/pymodbus/releases/tag/v3.0.2>`_ is the current release (Supports Python >=3.8).
 
 Remark: "Supports" means that we only test with those versions, lower versions (e.g. 3.7) might work depending on the functionality used.
 
@@ -179,7 +179,7 @@ Available options are:
 
 - **serial**, installs serial drivers.
 
-- **datastore**, installs databases (SQLAlchemy and Redit) for datastore.
+- **datastore**, installs databases (SQLAlchemy and Redis) for datastore.
 
 - **documentation**, installs tools to generate documentation.
 
@@ -189,10 +189,6 @@ Available options are:
 Or to install a specific release:
 
     pip install -U pymodbus==X.Y.Z
-
-You can also use Docker to run a local image with the package installed on the image:
-
-    docker pull riptideio/pymodbus
 
 Otherwise you can pull the trunk source and install from there::
 
@@ -232,21 +228,6 @@ This installs pymodbus in your virtual environment with pointers directly to the
 
 Either method will install all the required dependencies
 (at their appropriate versions) for your current python distribution.
-
-------------------------------------------------------------
-Docker Compose
-------------------------------------------------------------
-
-If you would like to use this image as part of a `docker compose` project, you can provide a custom command. For example,
-you can spin the server by creating a docker compose file containing the following::
-
-   pymodbus-server:
-      container_name: pymodbus-server
-      image: riptideio/pymodbus:X.Y.Z
-      command: ["./examples/server_sync.py"]
-
-After running `docker compose up`, you should have running the `server_sync.py` example, ready to accept connections from a client. You can,
-of course, add a custom script instead, to run your own logic instead.
 
 ------------------------------------------------------------
 Repository structure

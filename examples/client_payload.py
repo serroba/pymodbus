@@ -7,57 +7,41 @@ complicated memory layout using builder-
 
 Works out of the box together with payload_server.py
 """
+import asyncio
 import logging
 from collections import OrderedDict
 
-from pymodbus.client import ModbusTcpClient as ModbusClient
+from examples.client_async import run_async_client, setup_async_client
+from examples.helper import get_commandline
 from pymodbus.constants import Endian
 from pymodbus.payload import BinaryPayloadBuilder, BinaryPayloadDecoder
 
 
-# --------------------------------------------------------------------------- #
-# configure the client logging
-# --------------------------------------------------------------------------- #
-
-FORMAT = (
-    "%(asctime)-15s %(threadName)-15s"
-    " %(levelname)-8s %(module)-15s:%(lineno)-8s %(message)s"
-)
-logging.basicConfig(format=FORMAT)
-log = logging.getLogger()
-log.setLevel(logging.INFO)
-
+_logger = logging.getLogger()
 ORDER_DICT = {"<": "LITTLE", ">": "BIG"}
 
 
-def run_binary_payload_client():
-    """Run binary payload."""
-    # ----------------------------------------------------------------------- #
-    # We are going to use a simple sync client to send our requests
-    # ----------------------------------------------------------------------- #
-    client = ModbusClient("127.0.0.1", port=5020)
-    client.connect()
+async def run_payload_calls(client):
+    """Run binary payload.
 
-    # ----------------------------------------------------------------------- #
-    # If you need to build a complex message to send, you can use the payload
-    # builder to simplify the packing logic
-    #
-    # Packing/unpacking depends on your CPU´s word/byte order. Modbus messages
-    # are always using big endian. BinaryPayloadBuilder will pr default use
-    # what your CPU uses.
-    # The wordorder is applicable only for 32 and 64 bit values
-    # Lets say we need to write a value 0x12345678 to a 32 bit register
-    # The following combinations could be used to write the register
-    # ++++++++++++++++++++++++++++++++++++++++++++ #
-    # Word Order  | Byte order | Word1  | Word2  |
-    # ------------+------------+--------+--------+
-    #     Big     |     Big    | 0x1234 | 0x5678 |
-    #     Big     |    Little  | 0x3412 | 0x7856 |
-    #    Little   |     Big    | 0x5678 | 0x1234 |
-    #    Little   |    Little  | 0x7856 | 0x3412 |
-    # ++++++++++++++++++++++++++++++++++++++++++++ #
+    If you need to build a complex message to send, you can use the payload
+    builder to simplify the packing logic
 
-    # ----------------------------------------------------------------------- #
+    Packing/unpacking depends on your CPU´s word/byte order. Modbus messages
+    are always using big endian. BinaryPayloadBuilder will pr default use
+    what your CPU uses.
+    The wordorder is applicable only for 32 and 64 bit values
+    Lets say we need to write a value 0x12345678 to a 32 bit register
+    The following combinations could be used to write the register
+    ++++++++++++++++++++++++++++++++++++++++++++
+    Word Order  | Byte order | Word1  | Word2  |
+    ------------+------------+--------+--------+
+        Big     |     Big    | 0x1234 | 0x5678 |
+        Big     |    Little  | 0x3412 | 0x7856 |
+       Little   |     Big    | 0x5678 | 0x1234 |
+       Little   |    Little  | 0x7856 | 0x3412 |
+    ++++++++++++++++++++++++++++++++++++++++++++
+    """
     for word_endian, byte_endian in (
         (Endian.Big, Endian.Big),
         (Endian.Big, Endian.Little),
@@ -97,23 +81,26 @@ def run_binary_payload_client():
         print("\n")
         payload = builder.build()
         address = 0
+        slave = 1
         # We can write registers
-        client.write_registers(address, registers, unit=1)
+        rr = await client.write_registers(address, registers, slave=slave)
+        assert not rr.isError()
         # Or we can write an encoded binary string
-        client.write_registers(address, payload, skip_encode=True, unit=1)
+        rr = await client.write_registers(address, payload, skip_encode=True, slave=1)
+        assert not rr.isError()
 
         # ----------------------------------------------------------------------- #
         # If you need to decode a collection of registers in a weird layout, the
         # payload decoder can help you as well.
         # ----------------------------------------------------------------------- #
         print("Reading Registers:")
-        address = 0x0
         count = len(payload)
-        result = client.read_holding_registers(address, count, slave=1)
-        print(result.registers)
+        rr = await client.read_holding_registers(address, count, slave=slave)
+        assert not rr.isError()
+        print(rr.registers)
         print("\n")
         decoder = BinaryPayloadDecoder.fromRegisters(
-            result.registers, byteorder=byte_endian, wordorder=word_endian
+            rr.registers, byteorder=byte_endian, wordorder=word_endian
         )
         # Make sure word/byte order is consistent between BinaryPayloadBuilder and BinaryPayloadDecoder
         assert (
@@ -146,17 +133,13 @@ def run_binary_payload_client():
         )
         print("Decoded Data")
         for name, value in iter(decoded.items()):
-            print(
-                "%s\t" % name,  # pylint: disable=consider-using-f-string
-                hex(value) if isinstance(value, int) else value,
-            )
+            print(f"{name}\t{hex(value) if isinstance(value, int) else value}")
         print("\n")
-
-    # ----------------------------------------------------------------------- #
-    # close the client
-    # ----------------------------------------------------------------------- #
-    client.close()
 
 
 if __name__ == "__main__":
-    run_binary_payload_client()
+    cmd_args = get_commandline(
+        description="Run payload client.",
+    )
+    testclient = setup_async_client(cmd_args)
+    asyncio.run(run_async_client(testclient, modbus_calls=run_payload_calls))

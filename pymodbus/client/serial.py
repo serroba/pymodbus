@@ -81,7 +81,7 @@ class AsyncModbusSerialClient(ModbusBaseClient):
 
     def _create_protocol(self):
         """Create protocol."""
-        protocol = ModbusClientProtocol(framer=self.params.framer)
+        protocol = ModbusClientProtocol(framer=self.params.framer, xframer=self.framer)
         protocol.factory = self
         return protocol
 
@@ -304,6 +304,8 @@ class ModbusSerialClient(ModbusBaseClient):
             )
         if size is None:
             size = self._wait_for_data()
+        elif size > self._in_waiting():
+            self._wait_for_data()
         result = self.socket.read(size)
         return result
 

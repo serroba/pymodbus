@@ -92,6 +92,7 @@ class ModbusBaseRequestHandler(asyncio.BaseProtocol):
         self.running = False
         self.receive_queue = asyncio.Queue()
         self.handler_task = None  # coroutine to be run on asyncio loop
+        self._sent = b""  # for handle_local_echo
 
     def _log_exception(self):
         """Show log exception."""
@@ -450,6 +451,19 @@ class ModbusSingleRequestHandler(ModbusBaseRequestHandler, asyncio.Protocol):
 
     def data_received(self, data):
         """Receive data."""
+        if (
+            hasattr(self.server, "handle_local_echo")
+            and self.server.handle_local_echo is True
+            and self._sent
+        ):
+            if self._sent in data:
+                data, self._sent = data.replace(self._sent, b"", 1), b""
+            elif self._sent.startswith(data):
+                self._sent, data = self._sent.replace(data, b"", 1), b""
+            else:
+                self._sent = b""
+            if not data:
+                return
         self.receive_queue.put_nowait(data)
 
     async def _recv_(self):
@@ -458,6 +472,11 @@ class ModbusSingleRequestHandler(ModbusBaseRequestHandler, asyncio.Protocol):
     def _send_(self, data):
         if self.transport is not None:
             self.transport.write(data)
+            if (
+                hasattr(self.server, "handle_local_echo")
+                and self.server.handle_local_echo is True
+            ):
+                self._sent = data
 
 
 # --------------------------------------------------------------------------- #
@@ -758,7 +777,7 @@ class ModbusUdpServer:
             self.protocol = None
 
 
-class ModbusSerialServer:
+class ModbusSerialServer:  # pylint: disable=too-many-instance-attributes
     """A modbus threaded serial socket server.
 
     We inherit and overload the socket server so that we
@@ -784,6 +803,7 @@ class ModbusSerialServer:
         :param parity: Which kind of parity to use
         :param baudrate: The baud rate to use for the serial device
         :param timeout: The timeout to use for the serial device
+        :param handle_local_echo: (optional) Discard local echo from dongle.
         :param ignore_missing_slaves: True to not send errors on a request
                             to a missing slave
         :param broadcast_enable: True to treat unit_id 0 as broadcast address,
@@ -800,6 +820,9 @@ class ModbusSerialServer:
         self.timeout = kwargs.get("timeout", Defaults.Timeout)
         self.device = kwargs.get("port", 0)
         self.stopbits = kwargs.get("stopbits", Defaults.Stopbits)
+        self.handle_local_echo = kwargs.get(
+            "handle_local_echo", Defaults.HandleLocalEcho
+        )
         self.ignore_missing_slaves = kwargs.get(
             "ignore_missing_slaves", Defaults.IgnoreMissingSlaves
         )
@@ -932,16 +955,15 @@ class _serverList:
         self.task = None
 
     @classmethod
-    def get_server(cls, index: int):
+    def get_server(cls):
         """Get server at index."""
-        return cls._servers[index]
+        return cls._servers[-1]
 
     def _remove(self):
         """Remove server from active list."""
-        for i in range(len(self._servers)):  # pylint: disable=consider-using-enumerate
-            if self._servers[i] == self:
-                del self._servers[i]
-                break
+        server = self._servers[-1]
+        self._servers.pop()
+        del server
 
     async def run(self):
         """Help starting/stopping server."""
@@ -952,7 +974,9 @@ class _serverList:
             _logger.error(txt)
         await self.job_stop.wait()
         await self.server.shutdown()
+        await asyncio.sleep(0.1)
         self.task.cancel()
+        await asyncio.sleep(0.1)
         try:
             await asyncio.wait_for(self.task, 10)
         except asyncio.CancelledError:
@@ -1152,15 +1176,15 @@ def StartUdpServer(**kwargs):  # pylint: disable=invalid-name
     return asyncio.run(StartAsyncUdpServer(**kwargs))
 
 
-async def ServerAsyncStop(index: int = -1):  # pylint: disable=invalid-name
+async def ServerAsyncStop():  # pylint: disable=invalid-name
     """Terminate server."""
-    my_job = _serverList.get_server(index)
+    my_job = _serverList.get_server()
     my_job.request_stop()
     await my_job.async_await_stop()
 
 
-def ServerStop(index: int = -1):  # pylint: disable=invalid-name
+def ServerStop():  # pylint: disable=invalid-name
     """Terminate server."""
-    my_job = _serverList.get_server(index)
+    my_job = _serverList.get_server()
     my_job.request_stop()
     my_job.await_stop()

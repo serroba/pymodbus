@@ -67,15 +67,27 @@ class AsyncModbusTcpClient(ModbusBaseClient):
 
     async def close(self):  # pylint: disable=invalid-overridden-method
         """Stop client."""
+
+        # prevent reconnect.
+        self.delay_ms = 0
+
         if self.connected and self.protocol and self.protocol.transport:
             self.protocol.transport.close()
 
-        # prevent reconnect.
-        self.params.host = None
-
     def _create_protocol(self):
         """Create initialized protocol instance with factory function."""
-        protocol = ModbusClientProtocol(framer=self.params.framer, **self.params.kwargs)
+        protocol = ModbusClientProtocol(
+            framer=self.params.framer,
+            xframer=self.framer,
+            timeout=self.params.timeout,
+            retries=self.params.retries,
+            retry_on_empty=self.params.retry_on_empty,
+            close_comm_on_error=self.params.close_comm_on_error,
+            strict=self.params.strict,
+            broadcast_enable=self.params.broadcast_enable,
+            reconnect_delay=self.params.reconnect_delay,
+            **self.params.kwargs,
+        )
         protocol.factory = self
         return protocol
 
@@ -89,15 +101,16 @@ class AsyncModbusTcpClient(ModbusBaseClient):
                 ),
                 timeout=self.params.timeout,
             )
-            return transport, protocol
         except Exception as exc:  # pylint: disable=broad-except
             txt = f"Failed to connect: {exc}"
             _logger.warning(txt)
-            asyncio.ensure_future(self._reconnect())
+            if self.delay_ms > 0:
+                asyncio.ensure_future(self._reconnect())
         else:
             txt = f"Connected to {self.params.host}:{self.params.port}."
             _logger.info(txt)
             self.reset_delay()
+            return transport, protocol
 
     def protocol_made_connection(self, protocol):
         """Notify successful connection."""
@@ -118,7 +131,7 @@ class AsyncModbusTcpClient(ModbusBaseClient):
 
         self.connected = False
         self.protocol = None
-        if self.params.host:
+        if self.delay_ms > 0:
             asyncio.ensure_future(self._reconnect())
 
     async def _reconnect(self):

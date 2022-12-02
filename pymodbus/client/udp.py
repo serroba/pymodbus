@@ -88,7 +88,7 @@ class AsyncModbusUdpClient(ModbusBaseClient):
         :meta private:
         """
         # prevent reconnect:
-        self.params.host = None
+        self.delay_ms = 0
 
         if self.connected and self.protocol and self.protocol.transport:
             self.protocol.transport.close()
@@ -96,7 +96,17 @@ class AsyncModbusUdpClient(ModbusBaseClient):
     def _create_protocol(self, host=None, port=0):
         """Create initialized protocol instance with factory function."""
         protocol = ModbusClientProtocol(
-            use_udp=True, framer=self.params.framer, **self.params.kwargs
+            use_udp=True,
+            framer=self.params.framer,
+            xframer=self.framer,
+            timeout=self.params.timeout,
+            retries=self.params.retries,
+            retry_on_empty=self.params.retry_on_empty,
+            close_comm_on_error=self.params.close_comm_on_error,
+            strict=self.params.strict,
+            broadcast_enable=self.params.broadcast_enable,
+            reconnect_delay=self.params.reconnect_delay,
+            **self.params.kwargs,
         )
         protocol.params.host = host
         protocol.params.port = port
@@ -148,7 +158,7 @@ class AsyncModbusUdpClient(ModbusBaseClient):
 
             self.connected = False
             self.protocol = None
-            if self.params.host:
+            if self.delay_ms > 0:
                 asyncio.create_task(self._reconnect())
         else:
             _logger.error("Factory protocol connect callback called while connected.")
