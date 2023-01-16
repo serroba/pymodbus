@@ -121,7 +121,7 @@ def setup_server(args):
     # ----------------------------------------------------------------------- #
     # initialize the server information
     # ----------------------------------------------------------------------- #
-    # If you don"t set this or any fields, they are defaulted to empty strings.
+    # If you don't set this or any fields, they are defaulted to empty strings.
     # ----------------------------------------------------------------------- #
     args.identity = ModbusDeviceIdentification(
         info_name={
@@ -167,7 +167,6 @@ async def run_async_server(args):
             # custom_functions=[],  # allow custom handling
             framer=args.framer,  # The framer strategy to use
             # handler=None,  # handler for each session
-            # TBD allow_reuse_address=True,  # allow the reuse of an address
             # ignore_missing_slaves=True,  # ignore request to a missing slave
             # broadcast_enable=False,  # treat unit_id 0 as broadcast address,
             # timeout=1,  # waiting time for request to complete
